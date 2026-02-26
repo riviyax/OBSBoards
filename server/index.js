@@ -13,46 +13,75 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+/* SOCKET.IO */
 const io = new Server(server, {
-  cors: { origin: "*" }
+  cors: { origin: "*" },
+  transports: ["websocket"]
 });
 
+/* MIDDLEWARE */
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect(process.env.MONGO_URI)
+/* MONGODB CONNECTION (FIXED FOR ECONNRESET) */
+mongoose
+  .connect(process.env.MONGO_URI, {
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    family: 4 // 👈 forces IPv4 (VERY IMPORTANT on Windows)
+  })
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error(err));
+  .catch(err => {
+    console.error("❌ MongoDB Connection Failed");
+    console.error(err);
+    process.exit(1);
+  });
 
 /* SOCKET LOGIC */
 io.on("connection", async socket => {
-  console.log("🟢 Client connected");
+  console.log("🟢 Client connected:", socket.id);
 
-  // SEND INITIAL DATA
-  const members = await Member.find();
-  const branding = await Branding.findOne() || {
-    main: "MUDALIANS' MEDIA UNIT",
-    sub: "PREFECT DAY - 2026"
-  };
+  try {
+    const members = await Member.find().sort({ createdAt: 1 });
+    const branding =
+      (await Branding.findOne()) || {
+        main: "MUDALIANS' MEDIA UNIT",
+        sub: "PREFECT DAY - 2026"
+      };
 
-  socket.emit("members:update", members);
-  socket.emit("branding:update", branding);
+    socket.emit("members:update", members);
+    socket.emit("branding:update", branding);
+  } catch (err) {
+    console.error("❌ Initial data error", err);
+  }
 
   /* MEMBERS */
   socket.on("members:add", async data => {
-    await Member.create(data);
-    io.emit("members:update", await Member.find());
+    try {
+      await Member.create(data);
+      io.emit("members:update", await Member.find().sort({ createdAt: 1 }));
+    } catch (err) {
+      console.error("❌ Add member error", err);
+    }
   });
 
   socket.on("members:delete", async id => {
-    await Member.findByIdAndDelete(id);
-    io.emit("members:update", await Member.find());
+    try {
+      await Member.findByIdAndDelete(id);
+      io.emit("members:update", await Member.find().sort({ createdAt: 1 }));
+    } catch (err) {
+      console.error("❌ Delete member error", err);
+    }
   });
 
   /* BRANDING */
   socket.on("branding:update", async data => {
-    await Branding.findOneAndUpdate({}, data, { upsert: true });
-    io.emit("branding:update", data);
+    try {
+      await Branding.findOneAndUpdate({}, data, { upsert: true });
+      io.emit("branding:update", data);
+    } catch (err) {
+      console.error("❌ Branding update error", err);
+    }
   });
 
   /* DISPLAY CONTROL */
@@ -65,10 +94,11 @@ io.on("connection", async socket => {
   });
 
   socket.on("disconnect", () => {
-    console.log("🔴 Client disconnected");
+    console.log("🔴 Client disconnected:", socket.id);
   });
 });
 
-server.listen(process.env.PORT, () =>
-  console.log(`🚀 Server running on ${process.env.PORT}`)
-);
+/* START SERVER */
+server.listen(process.env.PORT, () => {
+  console.log(`🚀 Server running on ${process.env.PORT}`);
+});
