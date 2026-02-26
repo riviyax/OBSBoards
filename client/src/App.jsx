@@ -9,8 +9,10 @@ const socket = io("http://localhost:5000", {
 function App() {
   const [members, setMembers] = useState([]);
   const [branding, setBranding] = useState({
-    main: "MUDALIANS' MEDIA UNIT",
-    sub: "PREFECT DAY - 2026"
+    main: "Main Event Title",
+    sub: "Subtitle or Description",
+    primary: "#0033cc",
+    secondary: "#ffcc00"
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -18,11 +20,9 @@ function App() {
   const [isAnimating, setIsAnimating] = useState(true);
   const [formData, setFormData] = useState({ name: "", role: "" });
 
-  /* SOCKET LISTENERS */
   useEffect(() => {
     socket.on("members:update", setMembers);
     socket.on("branding:update", setBranding);
-
     socket.on("display:member", index => {
       setIsAnimating(false);
       setTimeout(() => {
@@ -31,7 +31,6 @@ function App() {
         setIsAnimating(true);
       }, 300);
     });
-
     socket.on("display:branding", () => {
       setIsAnimating(false);
       setTimeout(() => {
@@ -39,11 +38,9 @@ function App() {
         setIsAnimating(true);
       }, 300);
     });
-
     return () => socket.off();
   }, []);
 
-  /* ACTIONS */
   const addMember = e => {
     e.preventDefault();
     if (!formData.name) return;
@@ -51,22 +48,19 @@ function App() {
     setFormData({ name: "", role: "" });
   };
 
-  const deleteMember = (e, id) => {
-    e.stopPropagation();
-    socket.emit("members:delete", id);
-  };
-
-  const goLive = index => socket.emit("display:member", index);
-  const goBranding = () => socket.emit("display:branding");
-
   const updateBranding = updated => {
     setBranding(updated);
     socket.emit("branding:update", updated);
   };
 
+  const dynamicStyles = {
+    "--blue": branding.primary,
+    "--gold": branding.secondary,
+    "--dark-blue": branding.primary === "#0033cc" ? "#001a66" : branding.primary 
+  };
+
   return (
-    <div className="app-wrapper">
-      {/* OVERLAY */}
+    <div className="app-wrapper" style={dynamicStyles}>
       <div className="overlay-layer">
         <div className={`lower-third ${isAnimating ? "active" : ""} ${showMember ? "member-mode" : "branding-mode"}`}>
           <div className="main-plate">
@@ -76,7 +70,6 @@ function App() {
             </h1>
             <div className="shimmer" />
           </div>
-
           <div className="sub-plate">
             <span className="role-text">
               {showMember ? members[currentIndex]?.role : branding.sub}
@@ -85,45 +78,78 @@ function App() {
         </div>
       </div>
 
-      {/* ADMIN */}
       <div className="admin-panel">
         <div className="panel-header">
           <h2>CONTROL CENTER</h2>
-          <button className={`reset-btn ${!showMember ? "active-live" : ""}`} onClick={goBranding}>
+          <button 
+            className={`reset-btn ${!showMember ? "active-live" : ""}`} 
+            onClick={() => socket.emit("display:branding")}
+          >
             {!showMember ? "● LIVE: BRANDING" : "SWITCH TO BRANDING"}
           </button>
         </div>
 
         <div className="panel-content">
-          <section className="admin-section">
-            <h3>Event Branding</h3>
-            <div className="input-group">
-              <input value={branding.main} onChange={e => updateBranding({ ...branding, main: e.target.value.toUpperCase() })} />
-              <input value={branding.sub} onChange={e => updateBranding({ ...branding, sub: e.target.value.toUpperCase() })} />
+          <section className="admin-section left-col">
+            <div className="branding-controls">
+              <h3>Event Branding & Colors</h3>
+              <div className="branding-inputs">
+                <input 
+                  className="themed-input"
+                  value={branding.main} 
+                  onChange={e => updateBranding({ ...branding, main: e.target.value.toUpperCase() })} 
+                />
+                <input 
+                  className="themed-input"
+                  value={branding.sub} 
+                  onChange={e => updateBranding({ ...branding, sub: e.target.value.toUpperCase() })} 
+                />
+              </div>
+              
+              <div className="color-pickers">
+                <div className="picker-box">
+                  <label>Primary</label>
+                  <input type="color" value={branding.primary} onChange={e => updateBranding({ ...branding, primary: e.target.value })} />
+                </div>
+                <div className="picker-box">
+                  <label>Accent</label>
+                  <input type="color" value={branding.secondary} onChange={e => updateBranding({ ...branding, secondary: e.target.value })} />
+                </div>
+              </div>
             </div>
 
             <hr className="divider" />
 
-            <h3>Add Recipient</h3>
-            <form onSubmit={addMember} className="input-group">
-              <input placeholder="Name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-              <input placeholder="Role" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} />
-              <button className="add-btn">Add</button>
-            </form>
+            <div className="add-recipient-form">
+              <h3>Add Recipient</h3>
+              <form onSubmit={addMember} className="input-group">
+                <input className="themed-input" placeholder="Name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                <input className="themed-input" placeholder="Role" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} />
+                <button type="submit" className="add-btn">ADD TO QUEUE</button>
+              </form>
+            </div>
           </section>
 
-          <section className="admin-section">
+          <section className="admin-section right-col">
             <h3>Queue</h3>
-            <div className="scroll-container">
-              {members.map((m, i) => (
-                <div key={m._id} className={`member-row ${currentIndex === i && showMember ? "live" : ""}`} onClick={() => goLive(i)}>
-                  <div className="text-info">
-                    <span className="m-name">{m.name}</span>
-                    <span className="m-role">{m.role}</span>
+            <div className="scroll-container custom-scrollbar">
+              {members.length > 0 ? (
+                members.map((m, i) => (
+                  <div 
+                    key={m._id || i} 
+                    className={`member-row ${currentIndex === i && showMember ? "live" : ""}`} 
+                    onClick={() => socket.emit("display:member", i)}
+                  >
+                    <div className="text-info">
+                      <span className="m-name">{m.name}</span>
+                      <span className="m-role">{m.role}</span>
+                    </div>
+                    <button className="del-btn" onClick={e => { e.stopPropagation(); socket.emit("members:delete", m._id); }}>Delete</button>
                   </div>
-                  <button className="del-btn" onClick={e => deleteMember(e, m._id)}>Delete</button>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="empty-msg">Queue is empty</div>
+              )}
             </div>
           </section>
         </div>
