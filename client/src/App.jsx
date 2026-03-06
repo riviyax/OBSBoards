@@ -60,7 +60,7 @@ const Home = () => {
           />
 
           <SelectionCard 
-            to="/cricket-admin"
+            to="/cricket"
             variants={itemVars}
             title="Cricket Scoreboard"
             icon={<Trophy size={48} className="text-emerald-400" />}
@@ -121,7 +121,7 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/lower-third" element={<LowerThird />} />
-        <Route path="/cricket-admin" element={<CricketBoardAdmin />} />
+        <Route path="/cricket" element={<CricketBoardAdmin />} />
       </Routes>
     </Router>
   );
